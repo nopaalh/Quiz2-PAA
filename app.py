@@ -79,7 +79,6 @@ def apiGenerateMap():
     width = request.args.get('width', default=21, type=int)
     height = request.args.get('height', default=15, type=int)
     
-    # Ensure minimum sizes
     width = max(5, width)
     height = max(5, height)
     
