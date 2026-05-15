@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Maze Generatorr</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <div class="help-btn" onclick="toggleHelp()">?</div>
+      <h1>Maze Generatorr</h1>
+      <div class="controls">
+        <label for="widthInput">Width:</label>
+        <input type="number" id="widthInput" value="25" min="5" max="100" />
+        <label for="heightInput">Height:</label>
+        <input type="number" id="heightInput" value="15" min="5" max="100" />
+        <button id="generateBtn" onclick="fetchMap()">Generate New Map</button>
+        <button id="copyBtn" onclick="copyMapCode()" disabled>
+          Copy Map Code
+        </button>
+      </div>
+      <div id="gridContainer" class="grid-container"></div>
+    </div>
+
+    <div id="helpModal" class="modal">
+      <div class="modal-content">
+        <span class="close" onclick="toggleHelp()">&times;</span>
+        <h2>Cara Penggunaan</h2>
+        <ul>
+          <li>
+            <strong>Width & Height:</strong> Masukkan ukuran lebar dan tinggi
+            dungeon yang diinginkan (minimal 5).
+          </li>
+          <li>
+            <strong>Generate New Map:</strong> Klik tombol ini untuk membuat
+            labirin baru menggunakan <em>Randomized Kruskal's Algorithm</em>.
+          </li>
+          <li>
+            <strong>Animasi:</strong> Kamu bisa melihat proses pembuatan jalan
+            (dinding yang dihancurkan) secara step-by-step.
+          </li>
+          <li>
+            <strong>Copy Map Code:</strong> Setelah animasi selesai, klik tombol
+            ini untuk menyalin kode peta dalam format Python List.
+          </li>
+          <li>
+            <strong>Titik:</strong> Biru (P) adalah Start, Merah (G) adalah
+            Goal.
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <script>
+      let isAnimating = false;
+      let lastMapData = null;
+
+      function toggleHelp() {
+        const modal = document.getElementById("helpModal");
+        modal.style.display =
+          modal.style.display === "block" ? "none" : "block";
+      }
+
+      window.onclick = function (event) {
+        const modal = document.getElementById("helpModal");
+        if (event.target == modal) {
+          modal.style.display = "none";
+        }
+      };
+
+      async function fetchMap() {
+        if (isAnimating) return;
+        isAnimating = true;
+        document.getElementById("generateBtn").disabled = true;
+        document.getElementById("copyBtn").disabled = true;
+
+        const width = document.getElementById("widthInput").value || 21;
+        const height = document.getElementById("heightInput").value || 15;
+        const response = await fetch(
+          `/api/generateMap?width=${width}&height=${height}`,
+        );
+        const data = await response.json();
+        lastMapData = data;
+
+        await animateMap(data);
+
+        isAnimating = false;
+        document.getElementById("generateBtn").disabled = false;
+        document.getElementById("copyBtn").disabled = false;
+      }
+
+      function copyMapCode() {
+        if (!lastMapData) return;
+
+        const map = JSON.parse(JSON.stringify(lastMapData.finalMap));
+        const [sr, sc] = lastMapData.start;
+        const [gr, gc] = lastMapData.goal;
+
+        map[sr][sc] = "P";
+        map[gr][gc] = "G";
+
+        const mapStrings = map.map((row) => `    "${row.join("")}"`);
+        const output = `MAP_GEN = [\n${mapStrings.join(",\n")}\n]`;
+
+        navigator.clipboard.writeText(output).then(() => {
+          const btn = document.getElementById("copyBtn");
+          const originalText = btn.innerText;
+          btn.innerText = "Copied!";
+          btn.style.backgroundColor = "#2196F3";
+          setTimeout(() => {
+            btn.innerText = originalText;
+            btn.style.backgroundColor = "";
+          }, 2000);
+        });
+      }
+
+      async function animateMap(data) {
+        const container = document.getElementById("gridContainer");
+        container.innerHTML = "";
+
+        const rows = data.initialMap.length;
+        const cols = data.initialMap[0].length;
+        container.style.setProperty("--rows", rows);
+        container.style.setProperty("--cols", cols);
+
+        const cells = [];
+        data.initialMap.forEach((row, i) => {
+          cells[i] = [];
+          row.forEach((cell, j) => {
+            const cellDiv = document.createElement("div");
+            cellDiv.classList.add("cell");
+            if (cell === "#") {
+              cellDiv.classList.add("wall");
+            } else if (cell === ".") {
+              cellDiv.classList.add("floor");
+            }
+            container.appendChild(cellDiv);
+            cells[i][j] = cellDiv;
+          });
+        });
+
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+        for (const step of data.steps) {
+          const [r, c] = step;
+          cells[r][c].classList.remove("wall");
+          cells[r][c].classList.add("floor");
+          await sleep(20);
+        }
+
+        const [sr, sc] = data.start;
+        cells[sr][sc].classList.remove("floor");
+        cells[sr][sc].classList.add("start");
+        cells[sr][sc].title = "Start";
+
+        const [gr, gc] = data.goal;
+        cells[gr][gc].classList.remove("floor");
+        cells[gr][gc].classList.add("goal");
+        cells[gr][gc].title = "Goal";
+      }
+
+      window.onload = fetchMap;
+    </script>
+  </body>
+</html>
